@@ -11,16 +11,10 @@ import { supabase } from './supabase.js';
 
 const html = htm.bind(React.createElement);
 
-const INITIAL_CREDITS = [
-  { id: '1', sellerId: 's1', sellerName: 'GreenForest Ltd', amount: 1500, pricePerUnit: 18, projectType: 'Reforestation', location: 'Amazon Basin, Brazil', description: 'Sustainable reforestation of 500 hectares of degraded land.', status: 'available' },
-  { id: '2', sellerId: 's1', sellerName: 'GreenForest Ltd', amount: 800, pricePerUnit: 22, projectType: 'Renewable Energy', location: 'Atacama Desert, Chile', description: 'Solar farm project providing clean energy to local grid.', status: 'available' },
-  { id: '3', sellerId: 's2', sellerName: 'EcoCapture', amount: 3000, pricePerUnit: 15, projectType: 'Methane Capture', location: 'Dumpsite, Jakarta', description: 'Capture and conversion of landfill methane into electricity.', status: 'available' }
-];
-
 const App = () => {
   const [view, setView] = useState('home');
   const [user, setUser] = useState(null);
-  const [credits, setCredits] = useState(INITIAL_CREDITS);
+  const [credits, setCredits] = useState([]);
   const [orders, setOrders] = useState([]);
   const [authRole, setAuthRole] = useState(UserRole.BUYER);
   const [authForm, setAuthForm] = useState({ email: '', password: '', companyName: '', ownerName: '' });
@@ -28,7 +22,49 @@ const App = () => {
   useEffect(() => {
     const savedUser = localStorage.getItem('carbon_user');
     if (savedUser) setUser(JSON.parse(savedUser));
+    fetchData();
   }, []);
+
+  const fetchData = async () => {
+    try {
+      // Fetch Credits
+      const { data: creditsData, error: creditsError } = await supabase
+        .from('carbon_credits')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (creditsData) {
+        setCredits(creditsData.map(c => ({
+          ...c,
+          sellerId: c.seller_id,
+          sellerName: c.seller_name,
+          pricePerUnit: c.price_per_unit,
+          projectType: c.project_type,
+          imageUrl: c.image_url,
+          videoUrl: c.video_url
+        })));
+      }
+
+      // Fetch Orders
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (ordersData) {
+        setOrders(ordersData.map(o => ({
+          ...o,
+          creditId: o.credit_id,
+          buyerId: o.buyer_id,
+          sellerId: o.seller_id,
+          totalPrice: o.total_price,
+          date: new Date(o.created_at).toLocaleDateString()
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
 
   const handleLogout = () => {
     setUser(null);
@@ -36,59 +72,143 @@ const App = () => {
     localStorage.removeItem('carbon_user');
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const newUser = {
-        id: Math.random().toString(36).substr(2, 9),
-        email: authForm.email,
-        role: authRole,
-        companyName: authForm.companyName || (authRole === UserRole.BUYER ? 'Acme Corp' : 'EcoSellers'),
-        ownerName: authForm.ownerName || 'John Doe',
-        address: '123 Climate Way',
-        mobile: '+123456789',
-        verified: true
-    };
-    setUser(newUser);
-    localStorage.setItem('carbon_user', JSON.stringify(newUser));
-    setView('dashboard');
+    try {
+      let authResponse;
+      if (view === 'signup') {
+        authResponse = await supabase.auth.signUp({
+          email: authForm.email,
+          password: authForm.password,
+        });
+      } else {
+        authResponse = await supabase.auth.signInWithPassword({
+          email: authForm.email,
+          password: authForm.password,
+        });
+      }
+
+      if (authResponse.error) throw authResponse.error;
+      const authUser = authResponse.data.user;
+
+      if (!authUser) throw new Error("Authentication failed. Please check your email for a confirmation link if you just signed up.");
+
+      let { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (!profile) {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: authUser.id,
+            email: authForm.email,
+            role: authRole,
+            company_name: authForm.companyName || (authRole === UserRole.BUYER ? 'Acme Corp' : 'EcoSellers'),
+            owner_name: authForm.ownerName || 'John Doe',
+            address: '123 Climate Way',
+            mobile: '+123456789',
+            verified: true
+          }])
+          .select()
+          .single();
+        
+        if (createError) throw createError;
+        profile = newProfile;
+      }
+
+      const appUser = {
+        ...profile,
+        companyName: profile.company_name,
+        ownerName: profile.owner_name
+      };
+
+      setUser(appUser);
+      localStorage.setItem('carbon_user', JSON.stringify(appUser));
+      setView('dashboard');
+    } catch (err) {
+      console.error("Login error:", err);
+      alert("Login failed: " + err.message);
+    }
   };
 
-  const handleUpdateProfile = (updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem('carbon_user', JSON.stringify(updatedUser));
-    setView('dashboard');
+  const handleUpdateProfile = async (updatedUser) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          company_name: updatedUser.companyName,
+          owner_name: updatedUser.ownerName,
+          address: updatedUser.address
+        })
+        .eq('id', updatedUser.id);
+
+      if (error) throw error;
+      setUser(updatedUser);
+      localStorage.setItem('carbon_user', JSON.stringify(updatedUser));
+      setView('dashboard');
+    } catch (err) {
+      alert("Update failed: " + err.message);
+    }
   };
 
-  const handleBuy = (creditId) => {
+  const handleBuy = async (creditId) => {
     if (!user) return;
     const credit = credits.find(c => c.id === creditId);
     if (!credit || credit.status !== 'available') return;
 
-    const newOrder = {
-        id: Math.random().toString(36).substr(2, 9),
-        creditId,
-        buyerId: user.id,
-        sellerId: credit.sellerId,
-        amount: credit.amount,
-        totalPrice: credit.amount * credit.pricePerUnit,
-        date: new Date().toLocaleDateString(),
-        status: 'completed'
-    };
+    try {
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert([{
+          credit_id: creditId,
+          buyer_id: user.id,
+          seller_id: credit.sellerId,
+          amount: credit.amount,
+          total_price: credit.amount * credit.pricePerUnit,
+          status: 'completed'
+        }]);
 
-    setOrders(prev => [...prev, newOrder]);
-    setCredits(prev => prev.map(c => c.id === creditId ? {...c, status: 'sold'} : c));
-    alert('Transaction Complete! Your impact has been logged and the marketplace updated.');
+      if (orderError) throw orderError;
+
+      const { error: creditError } = await supabase
+        .from('carbon_credits')
+        .update({ status: 'sold' })
+        .eq('id', creditId);
+
+      if (creditError) throw creditError;
+
+      await fetchData();
+      alert('Transaction Complete! Your impact has been logged and the marketplace updated.');
+    } catch (err) {
+      alert("Transaction failed: " + err.message);
+    }
   };
 
-  const handleAddCredit = (newCredit) => {
-    const credit = { 
-      id: Math.random().toString(36).substr(2, 9), 
-      ...newCredit,
-      sellerId: user.id,
-      sellerName: user.companyName,
-      status: 'available'
-    };
-    setCredits(prev => [credit, ...prev]);
+  const handleAddCredit = async (newCredit) => {
+    try {
+      const { error } = await supabase
+        .from('carbon_credits')
+        .insert([{
+          seller_id: user.id,
+          seller_name: user.companyName,
+          amount: newCredit.amount,
+          price_per_unit: newCredit.pricePerUnit,
+          project_type: newCredit.projectType,
+          location: newCredit.location,
+          description: newCredit.description,
+          status: 'available',
+          image_url: newCredit.imageUrl,
+          video_url: newCredit.videoUrl
+        }]);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err) {
+      alert("Failed to list credit: " + err.message);
+    }
   };
 
   const renderContent = () => {

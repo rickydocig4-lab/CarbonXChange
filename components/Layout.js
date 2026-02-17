@@ -120,9 +120,9 @@ const Layout = ({ children, user, onLogout, onNavigate }) => {
           <div>
             <h4 className="text-white font-bold mb-4">Contact</h4>
             <ul className="space-y-2">
-              <li>support@carbonxchange.io</li>
-              <li>+1 (555) 123-4567</li>
-              <li>San Francisco, CA</li>
+              <li>ABC@gmail.com</li>
+              <li>+91 XXXXXXX</li>
+              <li>Delhi,India</li>
             </ul>
           </div>
         </div>
