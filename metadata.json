@@ -1,0 +1,7 @@
+{
+  "name": "CarbonXchange",
+  "description": "A professional climate-tech B2B platform for trading carbon credits between companies, featuring role-based dashboards, document verification, and AI-powered insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
