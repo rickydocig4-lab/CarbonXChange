@@ -116,6 +116,11 @@ const App = () => {
         .eq('id', authUser.id)
         .maybeSingle();
 
+      if (view !== 'signup' && profile && profile.role !== authRole) {
+        await supabase.auth.signOut();
+        throw new Error(`This account is registered as a ${profile.role}. Please login as a ${profile.role}.`);
+      }
+
       if (!profile) {
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
