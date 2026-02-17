@@ -7,6 +7,7 @@ import DashboardBuyer from './components/DashboardBuyer.js';
 import DashboardSeller from './components/DashboardSeller.js';
 import ProfileEdit from './components/ProfileEdit.js';
 import { UserRole } from './types.js';
+import { supabase } from './supabase.js';
 
 const html = htm.bind(React.createElement);
 
