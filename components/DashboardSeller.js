@@ -206,7 +206,7 @@ const DashboardSeller = ({ user, credits, orders, onAddCredit, onBuy }) => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   ${allDeals.length > 0 ? allDeals.map(deal => html`
-                    <tr key=${deal.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key=${deal.id + deal.type} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className=${`px-2.5 py-1 text-[10px] font-black rounded-lg uppercase tracking-widest ${deal.type === 'SALE' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'}`}>
                           ${deal.type}

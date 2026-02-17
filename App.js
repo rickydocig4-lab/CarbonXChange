@@ -33,6 +33,8 @@ const App = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (creditsError) throw creditsError;
+
       if (creditsData) {
         setCredits(creditsData.map(c => ({
           ...c,
@@ -50,6 +52,8 @@ const App = () => {
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (ordersError) throw ordersError;
 
       if (ordersData) {
         setOrders(ordersData.map(o => ({
@@ -80,6 +84,13 @@ const App = () => {
         authResponse = await supabase.auth.signUp({
           email: authForm.email,
           password: authForm.password,
+          options: {
+            data: {
+              company_name: authForm.companyName,
+              owner_name: authForm.ownerName,
+              role: authRole,
+            }
+          }
         });
       } else {
         authResponse = await supabase.auth.signInWithPassword({
@@ -89,6 +100,12 @@ const App = () => {
       }
 
       if (authResponse.error) throw authResponse.error;
+      
+      if (view === 'signup' && !authResponse.data.session) {
+        alert("Signup successful! Please check your email to confirm your account before logging in.");
+        return;
+      }
+
       const authUser = authResponse.data.user;
 
       if (!authUser) throw new Error("Authentication failed. Please check your email for a confirmation link if you just signed up.");
